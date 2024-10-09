@@ -1,0 +1,17 @@
+name: gsplat
+channels:
+  - pytorch
+  - conda-forge
+  - iopath 
+  - nvidia
+  - defaults
+dependencies:
+  - python=3.9.19
+  - pip
+  - pytorch-cuda=12.1
+  - pytorch=2.4.0
+  - torchvision
+  - torchaudio
+  - plyfile=0.8.1
+  - tqdm
+  - iopath 
