@@ -40,10 +40,10 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 
     // custom function
     m.def("rasterize_to_pixels_fwd_custom", 
-        &gsplat::rasterize_to_pixels_custom_fwd
+        &gsplat::rasterize_to_pixels_custom_fwd_tensor
     );
     m.def("rasterize_to_pixels_bwd_custom", 
-        &gsplat::rasterize_to_pixels_custom_bwd
+        &gsplat::rasterize_to_pixels_custom_bwd_tensor
     );
 
     m.def(
