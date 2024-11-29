@@ -34,6 +34,7 @@ __global__ void rasterize_to_pixels_fwd_kernel(
     const int32_t *__restrict__ flatten_ids,  // [n_isects]
     S *__restrict__ render_colors, // [C, image_height, image_width, COLOR_DIM]
     S *__restrict__ render_alphas, // [C, image_height, image_width, 1]
+    S *__restrict__ beta,          // [C, N]
     S *__restrict__ contrib,       // [C, N]
     int32_t *__restrict__ last_ids // [C, image_height, image_width]
 ) {
@@ -159,8 +160,10 @@ __global__ void rasterize_to_pixels_fwd_kernel(
             const S vis = alpha * T;
             const S *c_ptr = colors + g * COLOR_DIM;
 
+			if (beta && (int)(delta.x) == 0 && (int)(delta.y) == 0)
+				beta[g] = vis;
             if (contrib != nullptr){
-                atomicAdd(&contrib[id_batch[t]], vis);
+                atomicAdd(&contrib[g], vis);
             }
 
             GSPLAT_PRAGMA_UNROLL
@@ -192,7 +195,7 @@ __global__ void rasterize_to_pixels_fwd_kernel(
 }
 
 template <uint32_t CDIM>
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor> call_kernel_with_dim(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor> call_kernel_with_dim(
     // Gaussian parameters
     const torch::Tensor &means2d,   // [C, N, 2] or [nnz, 2]
     const torch::Tensor &conics,    // [C, N, 3] or [nnz, 3]
@@ -206,7 +209,10 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor> call_kern
     const uint32_t tile_size,
     // intersections
     const torch::Tensor &tile_offsets, // [C, tile_height, tile_width]
-    const torch::Tensor &flatten_ids   // [n_isects]
+    const torch::Tensor &flatten_ids,  // [n_isects]
+    //
+    bool need_beta=false,
+    bool need_contrib=false
 ) {
     GSPLAT_DEVICE_GUARD(means2d);
     GSPLAT_CHECK_INPUT(means2d);
@@ -243,13 +249,19 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor> call_kern
         {C, image_height, image_width, 1},
         means2d.options().dtype(torch::kFloat32)
     );
+    //
+	torch::Tensor beta;
+    if (need_beta)
+        beta = torch::full({C, N}, 0.0, means2d.options().dtype(torch::kFloat32));
+    //
+    torch::Tensor contrib;
+    if (need_contrib)
+        contrib = torch::full({C, N}, 0.0, means2d.options().dtype(torch::kFloat32));
+    //
     torch::Tensor last_ids = torch::empty(
         {C, image_height, image_width}, means2d.options().dtype(torch::kInt32)
     );
-    torch::Tensor contrib = torch::empty(
-        {C, N}, means2d.options().dtype(torch::kFloat32)
-    );
-
+    //
     at::cuda::CUDAStream stream = at::cuda::getCurrentCUDAStream();
     const uint32_t shared_mem =
         tile_size * tile_size *
@@ -291,14 +303,15 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor> call_kern
             flatten_ids.data_ptr<int32_t>(),
             renders.data_ptr<float>(),
             alphas.data_ptr<float>(),
-            contrib.data_ptr<float>(),
+            need_beta ? beta.data_ptr<float>() : nullptr,
+            need_contrib ? contrib.data_ptr<float>() : nullptr,
             last_ids.data_ptr<int32_t>()
         );
 
-    return std::make_tuple(renders, alphas, contrib, last_ids);
+    return std::make_tuple(renders, alphas, beta, contrib, last_ids);
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 rasterize_to_pixels_custom_fwd_tensor(
     // Gaussian parameters
     const torch::Tensor &means2d,   // [C, N, 2] or [nnz, 2]
@@ -313,7 +326,10 @@ rasterize_to_pixels_custom_fwd_tensor(
     const uint32_t tile_size,
     // intersections
     const torch::Tensor &tile_offsets, // [C, tile_height, tile_width]
-    const torch::Tensor &flatten_ids   // [n_isects]
+    const torch::Tensor &flatten_ids,  // [n_isects]
+    //
+    bool need_beta = false, 
+    bool need_contrib = false
 ) {
     GSPLAT_CHECK_INPUT(colors);
     uint32_t channels = colors.size(-1);
@@ -331,7 +347,9 @@ rasterize_to_pixels_custom_fwd_tensor(
             image_height,                                                      \
             tile_size,                                                         \
             tile_offsets,                                                      \
-            flatten_ids                                                        \
+            flatten_ids,                                                       \
+            need_beta,                                                         \
+            need_contrib                                                       \
         );
 
     // TODO: an optimization can be done by passing the actual number of
@@ -344,6 +362,7 @@ rasterize_to_pixels_custom_fwd_tensor(
         __GS__CALL_(4)
         __GS__CALL_(5)
         __GS__CALL_(6)
+        __GS__CALL_(7)
         __GS__CALL_(8)
         __GS__CALL_(9)
         __GS__CALL_(16)

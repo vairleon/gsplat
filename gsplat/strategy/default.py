@@ -82,6 +82,8 @@ class DefaultStrategy(Strategy):
     grow_scale2d: float = 0.05
     prune_scale3d: float = 0.1
     prune_scale2d: float = 0.15
+    prune_by_contrib_max_thres: float = 0.002
+    prune_by_contrib_sum_thres: float = 0.01
     refine_scale2d_stop_iter: int = 0
     refine_start_iter: int = 500
     refine_stop_iter: int = 15_000
@@ -90,6 +92,7 @@ class DefaultStrategy(Strategy):
     pause_refine_after_reset: int = 0
     absgrad: bool = False
     revised_opacity: bool = False
+    prune_by_contrib: bool = False
     verbose: bool = False
     key_for_gradient: Literal["means2d", "gradient_2dgs"] = "means2d"
 
@@ -190,15 +193,19 @@ class DefaultStrategy(Strategy):
             state["count"].zero_()
             if self.refine_scale2d_stop_iter > 0:
                 state["radii"].zero_()
+            #
+            if self.prune_by_contrib:
+                state["contrib"] = torch.zeros((state["contrib"].shape[0], 0), device="cuda")
             torch.cuda.empty_cache()
 
+        #
         if step % self.reset_every == 0:
             reset_opa(
                 params=params,
                 optimizers=optimizers,
                 state=state,
                 value=self.prune_opa * 2.0,
-            )
+            )     
 
     def _update_state(
         self,
@@ -235,23 +242,41 @@ class DefaultStrategy(Strategy):
         if self.refine_scale2d_stop_iter > 0 and state["radii"] is None:
             assert "radii" in info, "radii is required but missing."
             state["radii"] = torch.zeros(n_gaussian, device=grads.device)
+        #
+        if state["contrib"] is None and self.prune_by_contrib:
+            assert "contrib" in info, "contrib is required but missing."
+            state["contrib"] = torch.zeros(n_gaussian, device=grads.device)
+            state["contrib_max"] = torch.zeros(n_gaussian, device=grads.device)
 
         # update the running state
         if packed:
             # grads is [nnz, 2]
             gs_ids = info["gaussian_ids"]  # [nnz]
             radii = info["radii"]  # [nnz]
+            if self.prune_by_contrib:
+                contrib = info["contrib"]
         else:
             # grads is [C, N, 2]
             sel = info["radii"] > 0.0  # [C, N]
             gs_ids = torch.where(sel)[1]  # [nnz]
             grads = grads[sel]  # [nnz, 2]
             radii = info["radii"][sel]  # [nnz]
-
+            if self.prune_by_contrib:
+                contrib = info["contrib"][sel]
+        #
         state["grad2d"].index_add_(0, gs_ids, grads.norm(dim=-1))
         state["count"].index_add_(
             0, gs_ids, torch.ones_like(gs_ids, dtype=torch.float32)
         )
+        if self.prune_by_contrib:
+            #
+            self.contrib_record = torch.cat((self.contrib_record, state["contrib"].unsqueeze(-1)), dim=-1)
+            state["contrib"].index_add_(0, gs_ids, contrib)
+            state["contrib_max"][gs_ids] = torch.maximum(
+                state["contrib_max"][gs_ids],
+                contrib 
+            )
+        
         if self.refine_scale2d_stop_iter > 0:
             # Should be ideally using scatter max
             state["radii"][gs_ids] = torch.maximum(
@@ -259,6 +284,7 @@ class DefaultStrategy(Strategy):
                 # normalize radii to [0, 1] screen space
                 radii / float(max(info["width"], info["height"])),
             )
+        
 
     @torch.no_grad()
     def _grow_gs(
@@ -332,7 +358,15 @@ class DefaultStrategy(Strategy):
                 is_too_big |= state["radii"] > self.prune_scale2d
 
             is_prune = is_prune | is_too_big
-
+            
+        #
+        if self.prune_by_contrib:
+            #
+            is_less_important &= state["contrib"] < self.prune_by_contrib_sum_thres
+            is_less_important = state["contrib_max"].max(dim=-1).values < self.prune_by_contrib_max_thres
+            is_prune = is_prune | is_less_important
+ 
+        #
         n_prune = is_prune.sum().item()
         if n_prune > 0:
             remove(params=params, optimizers=optimizers, state=state, mask=is_prune)
