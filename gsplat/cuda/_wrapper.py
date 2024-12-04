@@ -608,6 +608,8 @@ def rasterize_to_pixels_custom(
 
         - **Rendered colors**. [C, image_height, image_width, channels]
         - **Rendered alphas**. [C, image_height, image_width, 1]
+        - **beta**.     [C, N]
+        - **contrib**.  [C, N]
     """
 
     C = isect_offsets.size(0)
@@ -1058,6 +1060,8 @@ class _RasterizeToPixelsCustom(torch.autograd.Function):
         isect_offsets: Tensor,  # [C, tile_height, tile_width]
         flatten_ids: Tensor,  # [n_isects]
         absgrad: bool,
+        need_beta: bool,
+        need_contrib: bool
     ) -> Tuple[Tensor, Tensor]:
         render_colors, render_alphas, beta, contrib, last_ids = _make_lazy_cuda_func(
             "rasterize_to_pixels_fwd_custom"
@@ -1073,6 +1077,8 @@ class _RasterizeToPixelsCustom(torch.autograd.Function):
             tile_size,
             isect_offsets,
             flatten_ids,
+            need_beta,
+            need_contrib
         )
 
         ctx.save_for_backward(
@@ -1101,6 +1107,8 @@ class _RasterizeToPixelsCustom(torch.autograd.Function):
         ctx,
         v_render_colors: Tensor,  # [C, H, W, 3]
         v_render_alphas: Tensor,  # [C, H, W, 1]
+        beta,
+        contrib
     ):
         (
             means2d,
@@ -1160,6 +1168,8 @@ class _RasterizeToPixelsCustom(torch.autograd.Function):
             v_colors,
             v_opacities,
             v_backgrounds,
+            None,
+            None,
             None,
             None,
             None,

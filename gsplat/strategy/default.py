@@ -110,6 +110,8 @@ class DefaultStrategy(Strategy):
         state = {"grad2d": None, "count": None, "scene_scale": scene_scale}
         if self.refine_scale2d_stop_iter > 0:
             state["radii"] = None
+        if self.prune_by_contrib:
+            state["contrib"] = None
         return state
 
     def check_sanity(
@@ -193,9 +195,8 @@ class DefaultStrategy(Strategy):
             state["count"].zero_()
             if self.refine_scale2d_stop_iter > 0:
                 state["radii"].zero_()
-            #
             if self.prune_by_contrib:
-                state["contrib"] = torch.zeros((state["contrib"].shape[0], 0), device="cuda")
+                state["contrib"].zero_()
             torch.cuda.empty_cache()
 
         #
@@ -243,10 +244,11 @@ class DefaultStrategy(Strategy):
             assert "radii" in info, "radii is required but missing."
             state["radii"] = torch.zeros(n_gaussian, device=grads.device)
         #
-        if state["contrib"] is None and self.prune_by_contrib:
-            assert "contrib" in info, "contrib is required but missing."
-            state["contrib"] = torch.zeros(n_gaussian, device=grads.device)
-            state["contrib_max"] = torch.zeros(n_gaussian, device=grads.device)
+        if self.prune_by_contrib:
+            if state["contrib"] is None:
+                assert "contrib" in info, "contrib is required but missing."
+                state["contrib"] = torch.zeros(n_gaussian, device=grads.device)
+                state["contrib_max"] = torch.zeros(n_gaussian, device=grads.device)
 
         # update the running state
         if packed:
@@ -254,7 +256,7 @@ class DefaultStrategy(Strategy):
             gs_ids = info["gaussian_ids"]  # [nnz]
             radii = info["radii"]  # [nnz]
             if self.prune_by_contrib:
-                contrib = info["contrib"]
+                contrib = info["contrib"] # [nnz]
         else:
             # grads is [C, N, 2]
             sel = info["radii"] > 0.0  # [C, N]
@@ -262,7 +264,7 @@ class DefaultStrategy(Strategy):
             grads = grads[sel]  # [nnz, 2]
             radii = info["radii"][sel]  # [nnz]
             if self.prune_by_contrib:
-                contrib = info["contrib"][sel]
+                contrib = info["contrib"][sel] # [nnz]
         #
         state["grad2d"].index_add_(0, gs_ids, grads.norm(dim=-1))
         state["count"].index_add_(
@@ -270,7 +272,6 @@ class DefaultStrategy(Strategy):
         )
         if self.prune_by_contrib:
             #
-            self.contrib_record = torch.cat((self.contrib_record, state["contrib"].unsqueeze(-1)), dim=-1)
             state["contrib"].index_add_(0, gs_ids, contrib)
             state["contrib_max"][gs_ids] = torch.maximum(
                 state["contrib_max"][gs_ids],
@@ -362,8 +363,8 @@ class DefaultStrategy(Strategy):
         #
         if self.prune_by_contrib:
             #
+            is_less_important = state["contrib_max"] < self.prune_by_contrib_max_thres
             is_less_important &= state["contrib"] < self.prune_by_contrib_sum_thres
-            is_less_important = state["contrib_max"].max(dim=-1).values < self.prune_by_contrib_max_thres
             is_prune = is_prune | is_less_important
  
         #
