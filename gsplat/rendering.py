@@ -253,8 +253,11 @@ def rasterization_custom(
     if geometrys is not None:
         G = geometrys.shape[-1]
         assert geometrys.shape[0] == N, geometrys.shape
-    
-
+    #
+    if 'G' not in render_mode:
+        G = 0
+        geometrys = None
+        
     def reshape_view(C: int, world_view: torch.Tensor, N_world: list) -> torch.Tensor:
         view_list = list(
             map(
