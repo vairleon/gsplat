@@ -248,13 +248,13 @@ def rasterization_custom(
     assert opacities.shape == (N,), opacities.shape
     assert viewmats.shape == (C, 4, 4), viewmats.shape
     assert Ks.shape == (C, 3, 3), Ks.shape
-    assert render_mode in ["RGB", "D", "ED", "RGB+D", "RGB+ED", "RGB+G", "RGB+EG", "RGB+G+D", "RGB+EG+ED"], render_mode
+    assert render_mode in ["RGB", "D", "ED", "RGB+D", "RGB+ED", "RGB+Go", "RGB+EGo", "RGB+Go+D", "RGB+EGo+ED"], render_mode
 
     if geometrys is not None:
         G = geometrys.shape[-1]
         assert geometrys.shape[0] == N, geometrys.shape
     #
-    if 'G' not in render_mode:
+    if "Go" not in render_mode:
         G = 0
         geometrys = None
         
@@ -508,18 +508,22 @@ def rasterization_custom(
             colors = reshape_view(C, colors, N_world)
 
     # Rasterize to pixels
-    if render_mode in ["RGB+D", "RGB+ED", "RGB+G+D", "RGB+EG+ED"]:
-        colors = torch.cat((colors, depths[..., None]), dim=-1)
-        if backgrounds is not None:
-            backgrounds = torch.cat(
-                [backgrounds, torch.zeros(C, G + 1, device=backgrounds.device)], dim=-1
-            )
-    elif render_mode in ["D", "ED"]:
+    if render_mode in ["D", "ED"]:
         colors = depths[..., None]
         if backgrounds is not None:
-            backgrounds = torch.zeros(C, G + 1, device=backgrounds.device)
+            backgrounds = torch.zeros(C, 1, device=backgrounds.device)
     else:  # RGB
-        pass
+        if "D" in render_mode:
+            colors = torch.cat((colors, depths[..., None]), dim=-1)
+        if backgrounds is not None:
+            if "Go" in render_mode:
+                backgrounds = torch.cat(
+                    [backgrounds, torch.zeros(C, G, device=backgrounds.device)], dim=-1
+                )
+            if "D" in render_mode:
+                backgrounds = torch.cat(
+                    [backgrounds, torch.zeros(C, 1, device=backgrounds.device)], dim=-1
+                )
 
     # Identify intersecting tiles
     tile_width = math.ceil(width / float(tile_size))
