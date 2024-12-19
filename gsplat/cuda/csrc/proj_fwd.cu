@@ -25,6 +25,8 @@ __global__ void proj_fwd_kernel(
     const uint32_t width,
     const uint32_t height,
     const CameraModelType camera_model,
+    const T fov_limit_x,
+    const T fov_limit_y,
     T *__restrict__ means2d, // [C, N, 2]
     T *__restrict__ covars2d // [C, N, 2, 2]
 ) {
@@ -54,7 +56,8 @@ __global__ void proj_fwd_kernel(
 
     switch (camera_model) {
         case CameraModelType::PINHOLE: // perspective projection
-            persp_proj(mean, covar, fx, fy, cx, cy, width, height, covar2d, mean2d);
+            persp_proj(mean, covar, fx, fy, cx, cy, width, height,
+                (OpT)fov_limit_x, (OpT)fov_limit_y, covar2d, mean2d);
             break;
         case CameraModelType::ORTHO: // orthographic projection
             ortho_proj(mean, covar, fx, fy, cx, cy, width, height, covar2d, mean2d);
@@ -84,7 +87,9 @@ std::tuple<torch::Tensor, torch::Tensor> proj_fwd_tensor(
     const torch::Tensor &Ks,     // [C, 3, 3]
     const uint32_t width,
     const uint32_t height,
-    const CameraModelType camera_model
+    const CameraModelType camera_model,
+    const float fov_limit_x,
+    const float fov_limit_y
 ) {
     GSPLAT_DEVICE_GUARD(means);
     GSPLAT_CHECK_INPUT(means);
@@ -118,6 +123,8 @@ std::tuple<torch::Tensor, torch::Tensor> proj_fwd_tensor(
                         width,
                         height,
                         camera_model,
+                        fov_limit_x,
+                        fov_limit_y,
                         means2d.data_ptr<scalar_t>(),
                         covars2d.data_ptr<scalar_t>()
                     );

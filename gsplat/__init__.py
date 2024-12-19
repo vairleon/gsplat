@@ -18,6 +18,7 @@ from .cuda._wrapper import (
     rasterize_to_indices_in_range_2dgs,
 )
 from .rendering import (
+    rasterization_custom,
     rasterization,
     rasterization_2dgs,
     rasterization_inria_wrapper,
@@ -31,6 +32,7 @@ all = [
     "DefaultStrategy",
     "MCMCStrategy",
     "Strategy",
+    "rasterization_custom",
     "rasterization",
     "rasterization_2dgs",
     "rasterization_inria_wrapper",

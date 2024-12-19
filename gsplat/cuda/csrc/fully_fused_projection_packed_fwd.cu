@@ -37,6 +37,8 @@ __global__ void fully_fused_projection_packed_fwd_kernel(
     const int32_t
         *__restrict__ block_accum,    // [C * blocks_per_row] packing helper
     const CameraModelType camera_model,
+    const T fov_limit_x,
+    const T fov_limit_y,
     // outputs
     int32_t *__restrict__ block_cnts, // [C * blocks_per_row] packing helper
     int32_t *__restrict__ indptr,       // [C + 1]
@@ -133,6 +135,8 @@ __global__ void fully_fused_projection_packed_fwd_kernel(
                     Ks[5],
                     image_width,
                     image_height,
+                    fov_limit_x,
+                    fov_limit_y,
                     covar2d,
                     mean2d
                 );
@@ -271,7 +275,9 @@ fully_fused_projection_packed_fwd_tensor(
     const float far_plane,
     const float radius_clip,
     const bool calc_compensations,
-    const CameraModelType camera_model
+    const CameraModelType camera_model,
+    const float fov_limit_x,
+    const float fov_limit_y
 ) {
     GSPLAT_DEVICE_GUARD(means);
     GSPLAT_CHECK_INPUT(means);
@@ -321,6 +327,8 @@ fully_fused_projection_packed_fwd_tensor(
                 radius_clip,
                 nullptr,
                 camera_model,
+                fov_limit_x,
+                fov_limit_y,
                 block_cnts.data_ptr<int32_t>(),
                 nullptr,
                 nullptr,
@@ -371,6 +379,8 @@ fully_fused_projection_packed_fwd_tensor(
                 radius_clip,
                 block_accum.data_ptr<int32_t>(),
                 camera_model,
+                fov_limit_x,
+                fov_limit_y,
                 nullptr,
                 indptr.data_ptr<int32_t>(),
                 camera_ids.data_ptr<int64_t>(),

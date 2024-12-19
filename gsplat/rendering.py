@@ -40,6 +40,8 @@ def rasterization_custom(
     far_plane: float = 1e10,
     radius_clip: float = 0.0,
     eps2d: float = 0.3,
+    fov_limit_x: float = 1.3,
+    fov_limit_y: float = 1.3,
     geometrys: Optional[Tensor] = None,
     # geometry: bool = False,
     sh_degree: Optional[int] = None,
@@ -328,6 +330,8 @@ def rasterization_custom(
         sparse_grad=sparse_grad,
         calc_compensations=(rasterize_mode == "antialiased"),
         camera_model=camera_model,
+        fov_limit_x=fov_limit_x,
+        fov_limit_y=fov_limit_y,
     )
 
     if packed:
@@ -644,7 +648,7 @@ def rasterization_custom(
         render_colors = torch.cat(
             [
                 render_colors[..., :D],
-                render_colors[..., D:D+G] * render_alphas.clamp(min=1e-10),
+                render_colors[..., D:D+G] / render_alphas.clamp(min=1e-10),
             ],
             dim=-1,
         )
@@ -1553,6 +1557,8 @@ def rasterization(
     far_plane: float = 1e10,
     radius_clip: float = 0.0,
     eps2d: float = 0.3,
+    fov_limit_x: float = 1.3,
+    fov_limit_y: float = 1.3,
     sh_degree: Optional[int] = None,
     packed: bool = True,
     tile_size: int = 16,
@@ -1825,6 +1831,9 @@ def rasterization(
         sparse_grad=sparse_grad,
         calc_compensations=(rasterize_mode == "antialiased"),
         camera_model=camera_model,
+        fov_limit_x=fov_limit_x,
+        fov_limit_y=fov_limit_y,
+        
     )
 
     if packed:

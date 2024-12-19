@@ -35,6 +35,8 @@ __global__ void fully_fused_projection_fwd_kernel(
     const T far_plane,
     const T radius_clip,
     const CameraModelType camera_model,
+    const T fov_limit_x,
+    const T fov_limit_y,
     // outputs
     int32_t *__restrict__ radii,  // [C, N]
     T *__restrict__ means2d,      // [C, N, 2]
@@ -118,6 +120,8 @@ __global__ void fully_fused_projection_fwd_kernel(
                 Ks[5],
                 image_width,
                 image_height,
+                fov_limit_x,
+                fov_limit_y,
                 covar2d,
                 mean2d
             );
@@ -215,7 +219,9 @@ fully_fused_projection_fwd_tensor(
     const float far_plane,
     const float radius_clip,
     const bool calc_compensations,
-    const CameraModelType camera_model
+    const CameraModelType camera_model,
+    const float fov_limit_x,
+    const float fov_limit_y
 ) {
     GSPLAT_DEVICE_GUARD(means);
     GSPLAT_CHECK_INPUT(means);
@@ -264,6 +270,8 @@ fully_fused_projection_fwd_tensor(
                 far_plane,
                 radius_clip,
                 camera_model,
+                fov_limit_x,
+                fov_limit_y,
                 radii.data_ptr<int32_t>(),
                 means2d.data_ptr<float>(),
                 depths.data_ptr<float>(),

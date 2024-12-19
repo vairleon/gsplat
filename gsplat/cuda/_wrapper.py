@@ -145,6 +145,8 @@ def proj(
     width: int,
     height: int,
     camera_model: Literal["pinhole", "ortho", "fisheye"] = "pinhole",
+    fov_limit_x: float = 1.3,
+    fov_limit_y: float = 1.3,
 ) -> Tuple[Tensor, Tensor]:
     """Projection of Gaussians (perspective or orthographic).
 
@@ -168,7 +170,8 @@ def proj(
     means = means.contiguous()
     covars = covars.contiguous()
     Ks = Ks.contiguous()
-    return _Proj.apply(means, covars, Ks, width, height, camera_model)
+    return _Proj.apply(means, covars, Ks, width, height, camera_model,
+                       fov_limit_x, fov_limit_y)
 
 
 def world_to_cam(
@@ -217,6 +220,8 @@ def fully_fused_projection(
     sparse_grad: bool = False,
     calc_compensations: bool = False,
     camera_model: Literal["pinhole", "ortho", "fisheye"] = "pinhole",
+    fov_limit_x: float = 1.3,
+    fov_limit_y: float = 1.3,
 ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
     """Projects Gaussians to 2D.
 
@@ -319,6 +324,8 @@ def fully_fused_projection(
             sparse_grad,
             calc_compensations,
             camera_model,
+            fov_limit_x,
+            fov_limit_y,
         )
     else:
         return _FullyFusedProjection.apply(
@@ -336,6 +343,8 @@ def fully_fused_projection(
             radius_clip,
             calc_compensations,
             camera_model,
+            fov_limit_x,
+            fov_limit_y,
         )
 
 
@@ -840,6 +849,8 @@ class _Proj(torch.autograd.Function):
         width: int,
         height: int,
         camera_model: Literal["pinhole", "ortho", "fisheye"] = "pinhole",
+        fov_limit_x: float = 1.3,
+        fov_limit_y: float = 1.3,
     ) -> Tuple[Tensor, Tensor]:
         camera_model_type = _make_lazy_cuda_obj(
             f"CameraModelType.{camera_model.upper()}"
@@ -852,6 +863,8 @@ class _Proj(torch.autograd.Function):
             width,
             height,
             camera_model_type,
+            fov_limit_x,
+            fov_limit_y,
         )
         ctx.save_for_backward(means, covars, Ks)
         ctx.width = width
@@ -936,6 +949,8 @@ class _FullyFusedProjection(torch.autograd.Function):
         radius_clip: float,
         calc_compensations: bool,
         camera_model: Literal["pinhole", "ortho", "fisheye"] = "pinhole",
+        fov_limit_x: float = 1.3,
+        fov_limit_y: float = 1.3,
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         camera_model_type = _make_lazy_cuda_obj(
             f"CameraModelType.{camera_model.upper()}"
@@ -959,6 +974,8 @@ class _FullyFusedProjection(torch.autograd.Function):
             radius_clip,
             calc_compensations,
             camera_model_type,
+            fov_limit_x,
+            fov_limit_y,
         )
         if not calc_compensations:
             compensations = None
@@ -1330,6 +1347,8 @@ class _FullyFusedProjectionPacked(torch.autograd.Function):
         sparse_grad: bool,
         calc_compensations: bool,
         camera_model: Literal["pinhole", "ortho", "fisheye"] = "pinhole",
+        fov_limit_x: float = 1.3,
+        fov_limit_y: float = 1.3,
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         camera_model_type = _make_lazy_cuda_obj(
             f"CameraModelType.{camera_model.upper()}"
@@ -1359,6 +1378,8 @@ class _FullyFusedProjectionPacked(torch.autograd.Function):
             radius_clip,
             calc_compensations,
             camera_model_type,
+            fov_limit_x,
+            fov_limit_y,
         )
         if not calc_compensations:
             compensations = None

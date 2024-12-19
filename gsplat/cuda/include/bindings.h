@@ -60,7 +60,9 @@ std::tuple<torch::Tensor, torch::Tensor> proj_fwd_tensor(
     const torch::Tensor &Ks,     // [C, 3, 3]
     const uint32_t width,
     const uint32_t height,
-    const CameraModelType camera_model
+    const CameraModelType camera_model,
+    const float fov_limit_x,
+    const float fov_limit_y
 );
 
 std::tuple<torch::Tensor, torch::Tensor> proj_bwd_tensor(
@@ -111,7 +113,9 @@ fully_fused_projection_fwd_tensor(
     const float far_plane,
     const float radius_clip,
     const bool calc_compensations,
-    const CameraModelType camera_model
+    const CameraModelType camera_model,
+    const float fov_limit_x,
+    const float fov_limit_y
 );
 
 std::tuple<
@@ -326,7 +330,9 @@ fully_fused_projection_packed_fwd_tensor(
     const float far_plane,
     const float radius_clip,
     const bool calc_compensations,
-    const CameraModelType camera_model
+    const CameraModelType camera_model,
+    const float fov_limit_x,
+    const float fov_limit_y
 );
 
 std::tuple<
