@@ -644,7 +644,7 @@ def rasterization_custom(
         render_colors = torch.cat(
             [
                 render_colors[..., :D],
-                render_colors[..., D:D+G] * render_alphas.clamp(min=1e-10),
+                render_colors[..., D:D+G] / render_alphas.clamp(min=1e-10),
             ],
             dim=-1,
         )
