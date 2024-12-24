@@ -206,7 +206,9 @@ class DefaultStrategy(Strategy):
                 optimizers=optimizers,
                 state=state,
                 value=self.prune_opa * 2.0,
-            )     
+            )
+        
+        return n_dupli, n_split, n_prune    
 
     def _update_state(
         self,
