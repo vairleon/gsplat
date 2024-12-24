@@ -870,6 +870,8 @@ class _Proj(torch.autograd.Function):
         ctx.width = width
         ctx.height = height
         ctx.camera_model_type = camera_model_type
+        ctx.fov_limit_x = fov_limit_x
+        ctx.fov_limit_y = fov_limit_y
         return means2d, covars2d
 
     @staticmethod
@@ -878,6 +880,8 @@ class _Proj(torch.autograd.Function):
         width = ctx.width
         height = ctx.height
         camera_model_type = ctx.camera_model_type
+        fov_limit_x = ctx.fov_limit_x
+        fov_limit_y = ctx.fov_limit_y
         v_means, v_covars = _make_lazy_cuda_func("proj_bwd")(
             means,
             covars,
@@ -885,10 +889,12 @@ class _Proj(torch.autograd.Function):
             width,
             height,
             camera_model_type,
+            fov_limit_x,
+            fov_limit_y,
             v_means2d.contiguous(),
             v_covars2d.contiguous(),
         )
-        return v_means, v_covars, None, None, None, None
+        return v_means, v_covars, None, None, None, None, None, None
 
 
 class _WorldToCam(torch.autograd.Function):
@@ -986,6 +992,8 @@ class _FullyFusedProjection(torch.autograd.Function):
         ctx.height = height
         ctx.eps2d = eps2d
         ctx.camera_model_type = camera_model_type
+        ctx.fov_limit_x = fov_limit_x
+        ctx.fov_limit_y = fov_limit_y
 
         return radii, means2d, depths, conics, compensations
 
@@ -1006,6 +1014,8 @@ class _FullyFusedProjection(torch.autograd.Function):
         height = ctx.height
         eps2d = ctx.eps2d
         camera_model_type = ctx.camera_model_type
+        fov_limit_x = ctx.fov_limit_x
+        fov_limit_y = ctx.fov_limit_y
         if v_compensations is not None:
             v_compensations = v_compensations.contiguous()
         v_means, v_covars, v_quats, v_scales, v_viewmats = _make_lazy_cuda_func(
@@ -1021,6 +1031,8 @@ class _FullyFusedProjection(torch.autograd.Function):
             height,
             eps2d,
             camera_model_type,
+            fov_limit_x,
+            fov_limit_y,
             radii,
             conics,
             compensations,
@@ -1046,6 +1058,7 @@ class _FullyFusedProjection(torch.autograd.Function):
             v_quats,
             v_scales,
             v_viewmats,
+            None,
             None,
             None,
             None,
@@ -1400,6 +1413,8 @@ class _FullyFusedProjectionPacked(torch.autograd.Function):
         ctx.eps2d = eps2d
         ctx.sparse_grad = sparse_grad
         ctx.camera_model_type = camera_model_type
+        ctx.fov_limit_x = fov_limit_x
+        ctx.fov_limit_y = fov_limit_y
 
         return camera_ids, gaussian_ids, radii, means2d, depths, conics, compensations
 
@@ -1431,6 +1446,8 @@ class _FullyFusedProjectionPacked(torch.autograd.Function):
         eps2d = ctx.eps2d
         sparse_grad = ctx.sparse_grad
         camera_model_type = ctx.camera_model_type
+        fov_limit_x = ctx.fov_limit_x
+        fov_limit_y = ctx.fov_limit_y
 
         if v_compensations is not None:
             v_compensations = v_compensations.contiguous()
@@ -1447,6 +1464,8 @@ class _FullyFusedProjectionPacked(torch.autograd.Function):
             height,
             eps2d,
             camera_model_type,
+            fov_limit_x,
+            fov_limit_y,
             camera_ids,
             gaussian_ids,
             conics,
@@ -1512,6 +1531,7 @@ class _FullyFusedProjectionPacked(torch.autograd.Function):
             v_quats,
             v_scales,
             v_viewmats,
+            None,
             None,
             None,
             None,

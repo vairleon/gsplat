@@ -35,6 +35,8 @@ __global__ void fully_fused_projection_bwd_kernel(
     const int32_t image_height,
     const T eps2d,
     const CameraModelType camera_model,
+    const T fov_limit_x,
+    const T fov_limit_y,
     // fwd outputs
     const int32_t *__restrict__ radii,   // [C, N]
     const T *__restrict__ conics,        // [C, N, 3]
@@ -143,6 +145,8 @@ __global__ void fully_fused_projection_bwd_kernel(
                 cy,
                 image_width,
                 image_height,
+                fov_limit_x,
+                fov_limit_y,
                 v_covar2d,
                 glm::make_vec2(v_means2d),
                 v_mean_c,
@@ -280,6 +284,8 @@ fully_fused_projection_bwd_tensor(
     const uint32_t image_height,
     const float eps2d,
     const CameraModelType camera_model,
+    const float fov_limit_x,
+    const float fov_limit_y,
     // fwd outputs
     const torch::Tensor &radii,                       // [C, N]
     const torch::Tensor &conics,                      // [C, N, 3]
@@ -349,6 +355,8 @@ fully_fused_projection_bwd_tensor(
                 image_height,
                 eps2d,
                 camera_model,
+                fov_limit_x,
+                fov_limit_y,
                 radii.data_ptr<int32_t>(),
                 conics.data_ptr<float>(),
                 compensations.has_value()

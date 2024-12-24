@@ -25,6 +25,8 @@ __global__ void proj_bwd_kernel(
     const uint32_t width,
     const uint32_t height,
     const CameraModelType camera_model,
+    const T fov_limit_x,
+    const T fov_limit_y,
     const T *__restrict__ v_means2d,  // [C, N, 2]
     const T *__restrict__ v_covars2d, // [C, N, 2, 2]
     T *__restrict__ v_means,          // [C, N, 3]
@@ -70,6 +72,8 @@ __global__ void proj_bwd_kernel(
                 cy,
                 width,
                 height,
+                (OpT)fov_limit_x,
+                (OpT)fov_limit_y,
                 glm::transpose(v_covar2d),
                 v_mean2d,
                 v_mean,
@@ -132,6 +136,8 @@ std::tuple<torch::Tensor, torch::Tensor> proj_bwd_tensor(
     const uint32_t width,
     const uint32_t height,
     const CameraModelType camera_model,
+    const float fov_limit_x,
+    const float fov_limit_y,
     const torch::Tensor &v_means2d, // [C, N, 2]
     const torch::Tensor &v_covars2d // [C, N, 2, 2]
 ) {
@@ -169,6 +175,8 @@ std::tuple<torch::Tensor, torch::Tensor> proj_bwd_tensor(
                         width,
                         height,
                         camera_model,
+                        fov_limit_x,
+                        fov_limit_y,
                         v_means2d.data_ptr<scalar_t>(),
                         v_covars2d.data_ptr<scalar_t>(),
                         v_means.data_ptr<scalar_t>(),

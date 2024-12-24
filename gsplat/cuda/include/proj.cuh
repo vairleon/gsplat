@@ -131,6 +131,8 @@ inline __device__ void persp_proj_vjp(
     const T cy,
     const uint32_t width,
     const uint32_t height,
+    const T fov_limit_x,
+    const T fov_limit_y,
     // grad outputs
     const mat2<T> v_cov2d,
     const vec2<T> v_mean2d,
@@ -142,10 +144,10 @@ inline __device__ void persp_proj_vjp(
 
     T tan_fovx = 0.5f * width / fx;
     T tan_fovy = 0.5f * height / fy;
-    T lim_x_pos = (width - cx) / fx + 0.3f * tan_fovx;
-    T lim_x_neg = cx / fx + 0.3f * tan_fovx;
-    T lim_y_pos = (height - cy) / fy + 0.3f * tan_fovy;
-    T lim_y_neg = cy / fy + 0.3f * tan_fovy;
+    T lim_x_pos = (width - cx) / fx + (fov_limit_x - 1.0f) * tan_fovx;
+    T lim_x_neg = cx / fx + (fov_limit_x - 1.0f) * tan_fovx;
+    T lim_y_pos = (height - cy) / fy + (fov_limit_y - 1.0f) * tan_fovy;
+    T lim_y_neg = cy / fy + (fov_limit_y - 1.0f) * tan_fovy;
 
     T rz = 1.f / z;
     T rz2 = rz * rz;

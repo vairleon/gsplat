@@ -36,6 +36,8 @@ __global__ void fully_fused_projection_packed_bwd_kernel(
     const int32_t image_height,
     const T eps2d,
     const CameraModelType camera_model,
+    const T fov_limit_x,
+    const T fov_limit_y,
     // fwd outputs
     const int64_t *__restrict__ camera_ids,   // [nnz]
     const int64_t *__restrict__ gaussian_ids, // [nnz]
@@ -144,6 +146,8 @@ __global__ void fully_fused_projection_packed_bwd_kernel(
                 cy,
                 image_width,
                 image_height,
+                fov_limit_x,
+                fov_limit_y,
                 v_covar2d,
                 glm::make_vec2(v_means2d),
                 v_mean_c,
@@ -319,6 +323,8 @@ fully_fused_projection_packed_bwd_tensor(
     const uint32_t image_height,
     const float eps2d,
     const CameraModelType camera_model,
+    const float fov_limit_x,
+    const float fov_limit_y,
     // fwd outputs
     const torch::Tensor &camera_ids,                  // [nnz]
     const torch::Tensor &gaussian_ids,                // [nnz]
@@ -405,6 +411,8 @@ fully_fused_projection_packed_bwd_tensor(
                 image_height,
                 eps2d,
                 camera_model,
+                fov_limit_x,
+                fov_limit_y,
                 camera_ids.data_ptr<int64_t>(),
                 gaussian_ids.data_ptr<int64_t>(),
                 conics.data_ptr<float>(),

@@ -72,6 +72,8 @@ std::tuple<torch::Tensor, torch::Tensor> proj_bwd_tensor(
     const uint32_t width,
     const uint32_t height,
     const CameraModelType camera_model,
+    const float fov_limit_x,
+    const float fov_limit_y,
     const torch::Tensor &v_means2d, // [C, N, 2]
     const torch::Tensor &v_covars2d // [C, N, 2, 2]
 );
@@ -136,6 +138,8 @@ fully_fused_projection_bwd_tensor(
     const uint32_t image_height,
     const float eps2d,
     const CameraModelType camera_model,
+    const float fov_limit_x,
+    const float fov_limit_y,
     // fwd outputs
     const torch::Tensor &radii,                       // [C, N]
     const torch::Tensor &conics,                      // [C, N, 3]
@@ -353,6 +357,8 @@ fully_fused_projection_packed_bwd_tensor(
     const uint32_t image_height,
     const float eps2d,
     const CameraModelType camera_model,
+    const float fov_limit_x,
+    const float fov_limit_y,
     // fwd outputs
     const torch::Tensor &camera_ids,                  // [nnz]
     const torch::Tensor &gaussian_ids,                // [nnz]
