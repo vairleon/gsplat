@@ -108,7 +108,7 @@ class MCMCStrategy(Strategy):
         step: int,
         info: Dict[str, Any],
         lr: float,
-    ):
+    ) -> tuple[int, int]:
         """Callback function to be executed after the `loss.backward()` call.
 
         Args:
@@ -119,6 +119,7 @@ class MCMCStrategy(Strategy):
 
         binoms = state["binoms"]
 
+        n_new_gs = 0
         if (
             step < self.refine_stop_iter
             and step > self.refine_start_iter
@@ -143,6 +144,8 @@ class MCMCStrategy(Strategy):
         inject_noise_to_position(
             params=params, optimizers=optimizers, state={}, scaler=lr * self.noise_lr
         )
+        
+        return n_new_gs, 0
 
     @torch.no_grad()
     def _relocate_gs(

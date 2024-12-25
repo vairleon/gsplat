@@ -162,13 +162,14 @@ class DefaultStrategy(Strategy):
         step: int,
         info: Dict[str, Any],
         packed: bool = False,
-    ):
+    ) -> tuple[int, int]:
         """Callback function to be executed after the `loss.backward()` call."""
         if step >= self.refine_stop_iter:
-            return
+            return 0, 0
 
         self._update_state(params, state, info, packed=packed)
 
+        n_dupli, n_split, n_prune = 0, 0, 0
         if (
             step > self.refine_start_iter
             and step % self.refine_every == 0
@@ -208,7 +209,7 @@ class DefaultStrategy(Strategy):
                 value=self.prune_opa * 2.0,
             )
         
-        return n_dupli, n_split, n_prune    
+        return n_dupli + n_split, n_prune
 
     def _update_state(
         self,
