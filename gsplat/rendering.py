@@ -644,11 +644,13 @@ def rasterization_custom(
             dim=-1,
         )
     
-    if "EG" in render_mode:
+    
+    if "EGo" in render_mode:
         render_colors = torch.cat(
             [
                 render_colors[..., :D],
                 render_colors[..., D:D+G] / render_alphas.clamp(min=1e-10),
+                render_colors[..., D+G:]
             ],
             dim=-1,
         )
