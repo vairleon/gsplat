@@ -46,7 +46,7 @@ def rasterization_custom(
     packed: bool = True,
     tile_size: int = 16,
     backgrounds: Optional[Tensor] = None,
-    render_mode: Literal["RGB", "D", "ED", "RGB+D", "RGB+ED", "RGB+G", "RGB+EG", "RGB+G+D", "RGB+EG+ED"] = "RGB",
+    render_mode: Literal["RGB", "D", "ED", "RGB+D", "RGB+ED", "RGB+Go", "RGB+EGo", "RGB+Go+D", "RGB+Go+ED", "RGB+EGo+ED"] = "RGB",
     sparse_grad: bool = False,
     absgrad: bool = False,
     rasterize_mode: Literal["classic", "antialiased"] = "classic",
@@ -248,7 +248,7 @@ def rasterization_custom(
     assert opacities.shape == (N,), opacities.shape
     assert viewmats.shape == (C, 4, 4), viewmats.shape
     assert Ks.shape == (C, 3, 3), Ks.shape
-    assert render_mode in ["RGB", "D", "ED", "RGB+D", "RGB+ED", "RGB+Go", "RGB+EGo", "RGB+Go+D", "RGB+EGo+ED"], render_mode
+    assert render_mode in ["RGB", "D", "ED", "RGB+D", "RGB+ED", "RGB+Go", "RGB+EGo", "RGB+Go+D", "RGB+Go+ED", "RGB+EGo+ED"], render_mode
 
     if geometrys is not None:
         G = geometrys.shape[-1]
