@@ -82,8 +82,9 @@ class DefaultStrategy(Strategy):
     grow_scale2d: float = 0.05
     prune_scale3d: float = 0.1
     prune_scale2d: float = 0.15
-    prune_by_contrib_max_thres: float = 0.002
+    prune_by_contrib_max_thres: float = 0.02
     prune_by_contrib_sum_thres: float = 0.01
+    prune_by_beta_max_thres: float = 0.0
     refine_scale2d_stop_iter: int = 0
     refine_start_iter: int = 500
     refine_stop_iter: int = 15_000
@@ -93,6 +94,7 @@ class DefaultStrategy(Strategy):
     absgrad: bool = False
     revised_opacity: bool = False
     prune_by_contrib: bool = False
+    prune_by_beta: bool = False
     verbose: bool = False
     key_for_gradient: Literal["means2d", "gradient_2dgs"] = "means2d"
 
@@ -112,6 +114,8 @@ class DefaultStrategy(Strategy):
             state["radii"] = None
         if self.prune_by_contrib:
             state["contrib"] = None
+        if self.prune_by_beta:
+            state["beta"] = None
         return state
 
     def check_sanity(
@@ -197,6 +201,8 @@ class DefaultStrategy(Strategy):
                 state["radii"].zero_()
             if self.prune_by_contrib:
                 state["contrib"].zero_()
+            if self.prune_by_beta:
+                state["beta"].zero_()
             torch.cuda.empty_cache()
 
         #
@@ -250,6 +256,11 @@ class DefaultStrategy(Strategy):
                 state["contrib"] = torch.zeros(n_gaussian, device=grads.device)
                 state["contrib_max"] = torch.zeros(n_gaussian, device=grads.device)
 
+        if self.prune_by_beta:
+            if state["beta"] is None:
+                assert "beta" in info, "beta is required but missing."
+                state["beta"] = torch.zeros(n_gaussian, device=grads.device)
+
         # update the running state
         if packed:
             # grads is [nnz, 2]
@@ -257,6 +268,8 @@ class DefaultStrategy(Strategy):
             radii = info["radii"]  # [nnz]
             if self.prune_by_contrib:
                 contrib = info["contrib"] # [nnz]
+            if self.prune_by_beta:
+                beta = info["beta"] # [nnz]
         else:
             # grads is [C, N, 2]
             sel = info["radii"] > 0.0  # [C, N]
@@ -265,6 +278,8 @@ class DefaultStrategy(Strategy):
             radii = info["radii"][sel]  # [nnz]
             if self.prune_by_contrib:
                 contrib = info["contrib"][sel] # [nnz]
+            if self.prune_by_beta:
+                beta = info["beta"][sel] # [nnz]
         #
         state["grad2d"].index_add_(0, gs_ids, grads.norm(dim=-1))
         state["count"].index_add_(
@@ -278,6 +293,12 @@ class DefaultStrategy(Strategy):
                 contrib 
             )
         
+        if self.prune_by_beta:
+            state["beta"][gs_ids] = torch.maximum(
+                state["beta"][gs_ids],
+                beta
+            )
+        
         if self.refine_scale2d_stop_iter > 0:
             # Should be ideally using scatter max
             state["radii"][gs_ids] = torch.maximum(
@@ -285,7 +306,6 @@ class DefaultStrategy(Strategy):
                 # normalize radii to [0, 1] screen space
                 radii / float(max(info["width"], info["height"])),
             )
-        
 
     @torch.no_grad()
     def _grow_gs(
@@ -365,6 +385,11 @@ class DefaultStrategy(Strategy):
             #
             is_less_important = state["contrib_max"] < self.prune_by_contrib_max_thres
             is_less_important &= state["contrib"] < self.prune_by_contrib_sum_thres
+            is_prune = is_prune | is_less_important
+
+        if self.prune_by_beta:
+            #
+            is_less_important = state["beta"] < self.prune_by_beta_max_thres
             is_prune = is_prune | is_less_important
  
         #
