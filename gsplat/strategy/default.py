@@ -77,7 +77,9 @@ class DefaultStrategy(Strategy):
     """
 
     prune_opa: float = 0.005
+    prune_geo_opa: float = 0.005
     grow_grad2d: float = 0.0002
+    grow_geo_grad2d: float = 0.0002
     grow_scale3d: float = 0.01
     grow_scale2d: float = 0.05
     prune_scale3d: float = 0.1
@@ -95,6 +97,7 @@ class DefaultStrategy(Strategy):
     revised_opacity: bool = False
     prune_by_contrib: bool = False
     prune_by_beta: bool = False
+    distangle_geometry: bool = False
     verbose: bool = False
     key_for_gradient: Literal["means2d", "gradient_2dgs"] = "means2d"
 
@@ -116,6 +119,9 @@ class DefaultStrategy(Strategy):
             state["contrib"] = None
         if self.prune_by_beta:
             state["beta"] = None
+        if self.distangle_geometry:
+            state["geo_grad2d"] = None
+
         return state
 
     def check_sanity(
@@ -151,12 +157,18 @@ class DefaultStrategy(Strategy):
         state: Dict[str, Any],
         step: int,
         info: Dict[str, Any],
+        geo_info: Dict[str, Any] = None,
     ):
         """Callback function to be executed before the `loss.backward()` call."""
         assert (
             self.key_for_gradient in info
         ), "The 2D means of the Gaussians is required but missing."
         info[self.key_for_gradient].retain_grad()
+        if geo_info is not None:
+            assert (
+            self.key_for_gradient in geo_info
+            ), "The 2D means of the Gaussians is required but missing."
+            geo_info[self.key_for_gradient].retain_grad()
 
     def step_post_backward(
         self,
@@ -165,13 +177,14 @@ class DefaultStrategy(Strategy):
         state: Dict[str, Any],
         step: int,
         info: Dict[str, Any],
+        geo_info: Dict[str, Any] = None,
         packed: bool = False,
     ):
         """Callback function to be executed after the `loss.backward()` call."""
         if step >= self.refine_stop_iter:
             return
 
-        self._update_state(params, state, info, packed=packed)
+        self._update_state(params, state, info, geo_info=geo_info, packed=packed)
 
         if (
             step > self.refine_start_iter
@@ -203,6 +216,8 @@ class DefaultStrategy(Strategy):
                 state["contrib"].zero_()
             if self.prune_by_beta:
                 state["beta"].zero_()
+            if self.distangle_geometry:
+                state["geo_grad2d"].zero_()
             torch.cuda.empty_cache()
 
         #
@@ -219,6 +234,7 @@ class DefaultStrategy(Strategy):
         params: Union[Dict[str, torch.nn.Parameter], torch.nn.ParameterDict],
         state: Dict[str, Any],
         info: Dict[str, Any],
+        geo_info: Dict[str, Any] = None,
         packed: bool = False,
     ):
         for key in [
@@ -238,6 +254,14 @@ class DefaultStrategy(Strategy):
             grads = info[self.key_for_gradient].grad.clone()
         grads[..., 0] *= info["width"] / 2.0 * info["n_cameras"]
         grads[..., 1] *= info["height"] / 2.0 * info["n_cameras"]
+        #
+        if self.distangle_geometry and geo_info is not None:
+            if self.absgrad:
+                geo_grads = geo_info[self.key_for_gradient].absgrad.clone()
+            else:
+                geo_grads = geo_info[self.key_for_gradient].grad.clone()
+            geo_grads[..., 0] *= geo_info["width"] / 2.0 * geo_info["n_cameras"]
+            geo_grads[..., 1] *= geo_info["height"] / 2.0 * geo_info["n_cameras"]
 
         # initialize state on the first run
         n_gaussian = len(list(params.values())[0])
@@ -249,6 +273,9 @@ class DefaultStrategy(Strategy):
         if self.refine_scale2d_stop_iter > 0 and state["radii"] is None:
             assert "radii" in info, "radii is required but missing."
             state["radii"] = torch.zeros(n_gaussian, device=grads.device)
+        if self.distangle_geometry and state["geo_grad2d"] is None:
+            state["geo_grad2d"] = torch.zeros(n_gaussian, device=grads.device)
+            
         #
         if self.prune_by_contrib:
             if state["contrib"] is None:
@@ -280,11 +307,16 @@ class DefaultStrategy(Strategy):
                 contrib = info["contrib"][sel] # [nnz]
             if self.prune_by_beta:
                 beta = info["beta"][sel] # [nnz]
+            if self.distangle_geometry and geo_info is not None:
+                geo_grads = geo_grads[sel]  # [nnz, 2]
         #
         state["grad2d"].index_add_(0, gs_ids, grads.norm(dim=-1))
         state["count"].index_add_(
             0, gs_ids, torch.ones_like(gs_ids, dtype=torch.float32)
         )
+        if self.distangle_geometry and geo_info is not None:
+            state["geo_grad2d"].index_add_(0, gs_ids, geo_grads.norm(dim=-1))
+        
         if self.prune_by_contrib:
             #
             state["contrib"].index_add_(0, gs_ids, contrib)
@@ -320,6 +352,10 @@ class DefaultStrategy(Strategy):
         device = grads.device
 
         is_grad_high = grads > self.grow_grad2d
+        if self.distangle_geometry:
+            geo_grads = state["geo_grad2d"] / count.clamp_min(1)
+            is_grad_high = is_grad_high | (geo_grads > self.grow_geo_grad2d)
+            
         is_small = (
             torch.exp(params["scales"]).max(dim=-1).values
             <= self.grow_scale3d * state["scene_scale"]
@@ -331,6 +367,8 @@ class DefaultStrategy(Strategy):
         is_split = is_grad_high & is_large
         if step < self.refine_scale2d_stop_iter:
             is_split |= state["radii"] > self.grow_scale2d
+        
+        #
         n_split = is_split.sum().item()
 
         # first duplicate
@@ -364,7 +402,11 @@ class DefaultStrategy(Strategy):
         state: Dict[str, Any],
         step: int,
     ) -> int:
-        is_prune = torch.sigmoid(params["opacities"].flatten()) < self.prune_opa
+        is_prune = torch.sigmoid(params["opacities"][..., 0:1].flatten()) < self.prune_opa
+        
+        if self.distangle_geometry:
+            is_prune = is_prune & (torch.sigmoid(params["opacities"][..., 1:2].flatten()) < self.prune_geo_opa)
+        
         if step > self.reset_every:
             is_too_big = (
                 torch.exp(params["scales"]).max(dim=-1).values
